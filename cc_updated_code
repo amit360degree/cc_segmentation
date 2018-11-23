@@ -1,0 +1,211 @@
+##path
+
+getwd()
+setwd("F:\\fnp\\git upload\\git upload\\Credit Card Segmentation")
+
+##packages
+install.packages("data.table")
+install.packages("dplyr")
+install.packages("psych")
+install.packages("GPArotation")
+
+install.packages("VIM")
+
+
+
+##library
+library("data.table")
+library("dplyr")
+library("psych")
+library("GPArotation")
+library("VIM")
+
+##Importing files
+final_data <-read.csv("F:\\fnp\\git upload\\git upload\\Credit Card Segmentation\\CC General.csv")
+
+View(final_data)
+
+##Derived Variables
+final_data$avg_purchase<-final_data$PURCHASES/12
+
+final_data$cash_adv_amt<-final_data$CASH_ADVANCE/12
+
+final_data$avg_amt_per_purchase<-final_data$PURCHASES/final_data$PURCHASES_TRX
+
+final_data$cash_advance_transaction<-final_data$CASH_ADVANCE/final_data$CASH_ADVANCE_TRX
+
+final_data$limit_ratio<-final_data$BALANCE/final_data$CREDIT_LIMIT
+
+final_data$payment_ratio<-final_data$PAYMENTS/final_data$MINIMUM_PAYMENTS
+
+final_data$purchase_type <-(ifelse(final_data$INSTALLMENTS_PURCHASES>0 & final_data$ONEOFF_PURCHASES>0,"both",
+                                             ifelse(final_data$INSTALLMENTS_PURCHASES> 0 & final_data$ONEOFF_PURCHASES==0,"installment",
+                                                    ifelse(final_data$INSTALLMENTS_PURCHASES==0 & final_data$ONEOFF_PURCHASES>0,"onoff","Bad"))))
+
+
+#######################################useful variables###############################
+
+
+inc<-c("BALANCE" ,"BALANCE_FREQUENCY" ,"PURCHASES","ONEOFF_PURCHASES","INSTALLMENTS_PURCHASES","CASH_ADVANCE","PURCHASES_FREQUENCY","ONEOFF_PURCHASES_FREQUENCY",    
+       "PURCHASES_INSTALLMENTS_FREQUENCY", "CASH_ADVANCE_FREQUENCY","CASH_ADVANCE_TRX","PURCHASES_TRX","CREDIT_LIMIT","PAYMENTS",                 
+       "MINIMUM_PAYMENTS","PRC_FULL_PAYMENT","avg_purchase","cash_adv_amt","avg_amt_per_purchase","cash_advance_transaction","limit_ratio","payment_ratio")
+
+
+final_data<-final_data[inc]
+View(final_data)
+
+
+
+
+
+##User Defined Function
+
+mystats <- function(x) {
+  nmiss<-sum(is.na(x))
+  a <- x[!is.na(x)]
+  m <- mean(a)
+  n <- length(a)
+  s <- sd(a)
+  min <- min(a)
+  pctls<-quantile(a,probs=c(0.01, 0.05,0.1,0.25,0.5,0.75,0.9,0.95,0.99))
+  max <- max(a)
+  return(c(n=n, nmiss=nmiss,  mean=m, stdev=s,min = min, pctls=pctls,max=max))
+}
+
+
+diag_stats<-t(data.frame(apply(final_data, 2, FUN = mystats)))
+ 
+View(diag_stats)
+
+write.csv(diag_stats,"diag_stats.csv") 
+ 
+
+##Outlier treatment and missing value treatment
+final_data$BALANCE[final_data$BALANCE>9338.804814]<- 9338.804814
+final_data$PURCHASES[final_data$PURCHASES>8977.29000000001]<- 8977.29000000001
+final_data$ONEOFF_PURCHASES[final_data$ONEOFF_PURCHASES>6689.89820000001]<- 6689.89820000001
+final_data$INSTALLMENTS_PURCHASES[final_data$INSTALLMENTS_PURCHASES>3886.2405]<- 3886.2405
+final_data$CASH_ADVANCE[final_data$CASH_ADVANCE>9588.1633568]<- 9588.1633568
+final_data$CREDIT_LIMIT[final_data$CREDIT_LIMIT>17000]<- 17000
+final_data$PAYMENTS[final_data$PAYMENTS>13608.7155406]<- 13608.7155406
+final_data$MINIMUM_PAYMENTS[final_data$MINIMUM_PAYMENTS>9034.09873695978]<- 9034.09873695978
+
+final_data$avg_purchase[final_data$m_avg_purchase>748.107500000001]<- 748.107500000001
+
+final_data$cash_adv_amt[final_data$cash_adv_amt>799.013613066667]<- 799.013613066667
+
+##final_data$avg_amt_per_purchase[final_data$avg_amt_per_purchase>756.992100000003]<- 756.992100000003
+##final_data$cash_advance_transaction[final_data$cash_advance_transaction>1909.18342017]<- 1909.18342017
+
+
+final_data$avg_amt_per_purchase[final_data$avg_amt_per_purchase == "Inf"]<- 0
+##final_data$pay_ratio[final_data$pay_ratio == "inf"]<- 0
+
+
+##Missing value imputation
+num_var = sapply(final_data, is.numeric)
+
+final_data[,num_var] <-
+  apply(data.frame(final_data[,num_var]), 2, function(x) {
+    x <- replace(x, is.na(x), mean(x, na.rm = TRUE))
+  })
+
+View(final_data)
+
+## FACTOR ANALYSIS 
+corrm<- cor(final_data)
+
+
+
+### DECIDING NUMBER OF FACTORS USING SCREE PLOT & EIGEN VALUES OVER 1
+
+
+
+scree(corrm, factors=T, main="scree plot", hline=NULL, add=FALSE) ### SCREE PLOT
+
+eigen(corrm)$values                                                     ### EIGEN VALUES
+
+
+eigen_values <- mutate(data.frame(eigen(corrm)$values)
+                       ,cum_sum_eigen=cumsum(eigen.corrm..values)
+                       , pct_var=eigen.corrm..values/sum(eigen.corrm..values)
+                       , cum_pct_var=cum_sum_eigen/sum(eigen.corrm..values))  # CALCULATING VARIANCE 
+
+write.csv(eigen_values, "eigen.values.csv")  ### EXPORTING EIGEN VALUE SUMMARY
+
+  FA<-fa(r=corrm, 7, rotate="varimax", fm="ml")               
+print(FA)                                                    
+FA_SORT<-fa.sort(FA)                                         
+ls(FA_SORT)                                                  
+FA_SORT$loadings
+#FA_SORT$e.values                                            
+Loadings <- data.frame(FA_SORT$loadings[1:ncol(ccgeneral),])
+write.csv(Loadings, "C:\\Users\\ravik\\Dropbox\\Dropbox Work\\Business Analytics\\Final Case Study 1 - Credit Card Segmentation\\loadings.csv") ### SAVING THE FILE
+
+#Prepare final Data
+
+#standardizing the data
+
+final_data = scale(final_data)
+
+#View(final_data)
+#building clusters using k-means clustering 
+
+cluster_three <- kmeans(final_data,3)
+cluster_four <- kmeans(final_data,4)
+cluster_five <- kmeans(final_data,5)
+cluster_six <- kmeans(final_data,6)
+
+cluster_three$cluster
+
+
+clust_data1<-cbind(final_data,km_clust_3=cluster_three$cluster,km_clust_4=cluster_four$cluster,km_clust_5=cluster_five$cluster ,km_clust_6=cluster_six$cluster   )
+#View(clust_data1)
+clust_data11 <- clust_data1
+#Graph based on k-means - Optional
+require(cluster)
+
+clusplot(final_data, #dataframe
+         cluster_five$cluster, #clusterdata
+         color = TRUE, #color
+         #shade = TRUE, # Lines in clusters
+         lines =6, # lines connecting centroids
+         labels = 2 # Labels clusters and cases
+)
+
+###Profiling
+
+#Converting into factors
+clust_data1[,"km_clust_3"]=factor(clust_data1[,"km_clust_3"])
+clust_data1[,"km_clust_4"]=factor(clust_data1[,"km_clust_4"])
+clust_data1[,"km_clust_5"]=factor(clust_data1[,"km_clust_5"])
+clust_data1[,"km_clust_6"]=factor(clust_data1[,"km_clust_6"])
+
+clust_data1 <- data.frame(clust_data1)
+
+require(tables)
+
+profiling <- tabular(1+BALANCE+BALANCE_FREQUENCY+PURCHASES+ONEOFF_PURCHASES+INSTALLMENTS_PURCHASES+
+                       CASH_ADVANCE+PURCHASES_FREQUENCY+ONEOFF_PURCHASES_FREQUENCY+
+                       PURCHASES_INSTALLMENTS_FREQUENCY+CASH_ADVANCE_FREQUENCY+
+                       CASH_ADVANCE_TRX+PURCHASES_TRX+CREDIT_LIMIT+
+                       PAYMENTS+MINIMUM_PAYMENTS+PRC_FULL_PAYMENT+TENURE ~ mean+(mean*km_clust_3)+(mean*km_clust_4)+(mean*km_clust_5)+(mean*km_clust_6), data=clust_data1 )
+
+profile1<-as.matrix(profiling)
+profile1<-data.frame(profile1)
+View(profile1)
+
+profile<-tabular(1~length+(length*km_clust_3)+(length*km_clust_4)+(length*km_clust_5)+(length*km_clust_6),
+                 data=clust_data1)
+profile2<-as.matrix(profile)
+profile2<-data.frame(profile2)
+View(profile2)
+
+write.csv(profile1,"profile1.csv",row.names = F)
+write.csv(profile2,"profile2.csv",row.names = F)
+
+#############################END OF Case study############################
+
+
+ 
+ 
